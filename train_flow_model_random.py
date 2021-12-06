@@ -1,0 +1,242 @@
+from torch import optim
+from argparse import ArgumentParser
+
+from torch.utils.data import DataLoader
+from torchvision import transforms, datasets
+
+from models import Generator, RealNVP, get_psp
+from models.e4e.model_utils import setup_model
+from train import RandomFlowCoach, GradientManager, WPlusFlowCoach
+
+from dataset import setup_dataset
+from image_saver import ImageLogger
+from local_model_store import LocalModelStore
+from text import text_to_image, text_invert_compare
+from tqdm import tqdm
+
+import os
+import torch
+import clip
+import mlflow
+
+import consts
+
+mlflow.set_tracking_uri(consts.MLFLOW_TRACKING_URI)
+
+
+def get_args():
+    parser = ArgumentParser()
+    parser.add_argument('--exp_dir', default='/home/ssd_storage/experiments/clip_decoder', type=str,
+                        help='Path to experiment output directory')
+    parser.add_argument('--experiment_name', type=str, default='clip_decoder',
+                        help='The specific name of the experiment')
+
+    parser.add_argument('--num_batches_per_epoch', default=250, type=int, help='num batches per epoch')
+
+    parser.add_argument('--test_batch_size', default=4, type=int, help='Batch size for testing and inference')
+    parser.add_argument('--num_workers', default=4, type=int, help='Number of train dataloader workers')
+
+    # parser.add_argument('--w_norm_lambda', default=0.1, type=float, help='W-norm loss multiplier factor') # 0.01
+    # self.parser.add_argument('--lpips_lambda_crop', default=0, type=float, help='LPIPS loss multiplier factor for inner image region')
+    # self.parser.add_argument('--l2_lambda_crop', default=0, type=float, help='L2 loss multiplier factor for inner image region')
+
+    parser.add_argument('--product_image_size', default=224, type=int, help='(size x size) of produced images')
+    parser.add_argument("--train_encoder", action="store_true", help="Should train CLIP?")
+    parser.add_argument("--train_full_generator", action="store_true", help="Should train CLIP?")
+
+    parser.add_argument('--stylegan_weights', default='./models/stylegan2/stylegan2-ffhq-config-f.pt', type=str,
+                        help='Path to StyleGAN model weights')
+    parser.add_argument('--checkpoint_path', type=str, help='Path to model checkpoint')
+
+    parser.add_argument('--image_interval', default=50, type=int,
+                        help='Interval for logging train images during training')
+    parser.add_argument('--board_interval', default=10, type=int, help='Interval for logging metrics to tensorboard')
+    parser.add_argument('--val_interval', default=10, type=int, help='Validation interval')
+    parser.add_argument('--save_interval', default=25, type=int, help='Model checkpoint interval (epochs)')
+    # parser.add_argument('--train_dataset_path', default='/home/ssd_storage/datasets/celebA_crops', type=str,
+    #                     help='path to the train dir')
+    parser.add_argument('--test_dataset_path', default='/home/ssd_storage/datasets/celebA_crops', type=str,
+                        help='path to the validation dir')
+    # parser.add_argument('--test_dataset_path', default='/home/ssd_storage/datasets/ffhq', type=str,
+    #                     help='path to the validation dir')
+    # parser.add_argument('--test_dataset_path',
+    #                     default="/home/administrator/datasets/processed/vggface2_discriminator min_size=400_num-classes_1250_{'train': 300, 'val': 50, 'test': 50}_crops/test",
+    #                     type=str,
+    #                     help='path to the train dir')
+    parser.add_argument('--train_dataset_path',
+                        default="/home/ssd_storage/datasets/processed/clip_familiar_vggface2_{'train': 0.7, 'val': 0.2, 'test': 0.1}/train",
+                        type=str,
+                        help='path to the train dir')
+    parser.add_argument("--lr_reduce_step", type=int, default=25000, help="after how many steps to reduce lr")
+    parser.add_argument("--w_latent_dim", type=int, default=512, help="dim of w latent space")
+    parser.add_argument("--mixing", type=float, default=0.9, help="probability of latent code mixing")
+
+    parser.add_argument('--n_hidden', type=int, default=5, help='Number of hidden layers in each MADE.')
+    parser.add_argument('--n_blocks', type=int, default=5,
+                        help='Number of blocks to stack in a model (MADE in MAF; Coupling+BN in RealNVP).')
+    parser.add_argument('--hidden_dim', default=512, type=int,
+                        help='hidden dim in s,t for conditional normalizing flow')
+    parser.add_argument('--batch_size', default=12, type=int, help='Batch size for training')
+    parser.add_argument('--no_batch_norm', action='store_true')
+    parser.add_argument('--lr', default=1e-4, type=float, help='LR')
+    # parser.add_argument('--mapping_depth', default=4, type=int, help='num of layers in mapping function')
+    parser.add_argument('--embedding_norm_path',
+                        default='/home/ssd_storage/experiments/clip_decoder/celebA_subset_distribution2.pt', type=str,
+                        help='Path to embeddings norm')
+    parser.add_argument('--semantic_architecture', default="ViT-B/32")  # ViT-B/32 \ RN101 \ RN50x16
+    parser.add_argument('--max_steps', default=200, type=int, help='Maximum number of training steps')
+    parser.add_argument('--start_epoch', default=0, type=int, help='epoch to start form')
+    parser.add_argument('--mapping_ckpt', default=None, type=str,
+                        help='where to load the model weights from')  #'/home/hdd_storage/mlflow/artifact_store/clip_decoder/05d9c461360146b58f94b47518935edf/artifacts/flow_model_mapping99.pth'
+    parser.add_argument('--W_plus', action='store_false', help='Should work in W+')
+    parser.add_argument('--test_with_random_z', action='store_true',
+                        help='When predicting clip picture - should ues random Z')
+    parser.add_argument('--test_on_dataset', action='store_false',
+                        help='When predicting clip picture - attempt to recreate from test dataset')
+    parser.add_argument('--clip_on_orig', action='store_false', help='epoch to start form')
+    parser.add_argument('--spherical_coordinates', action='store_true', help='Should use spherical coordinates')
+    parser.add_argument('--autoencoder_model', default='e4e', type=str, help='e4e / psp')
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    opts = get_args()
+    if mlflow.get_experiment_by_name(opts.experiment_name) is None:
+        mlflow.create_experiment(opts.experiment_name,
+                                 artifact_location=os.path.join(consts.MLFLOW_ARTIFACT_STORE, opts.experiment_name))
+    mlflow.set_experiment(opts.experiment_name)
+
+    with mlflow.start_run():
+        # mlflow.log_param('mapping_depth', opts.mapping_depth)
+        mlflow.log_param('train_dataset_path', opts.train_dataset_path)
+        mlflow.log_param('test_dataset_path', opts.test_dataset_path)
+        mlflow.log_param('lr', opts.lr)
+        mlflow.log_param('semantic_architecture', opts.semantic_architecture)
+        mlflow.log_param('n_hidden', opts.n_hidden)
+        mlflow.log_param('n_blocks', opts.n_blocks)
+        mlflow.log_param('hidden_dim', opts.hidden_dim)
+        mlflow.log_param('batch_size', opts.batch_size)
+        mlflow.log_param('no_batch_norm', opts.no_batch_norm)
+        mlflow.log_param('semantic_architecture', opts.semantic_architecture)
+        mlflow.log_param('semantic_architecture', opts.semantic_architecture)
+        mlflow.log_param('embedding_norm_path', opts.embedding_norm_path)
+        mlflow.log_param('W_plus', opts.W_plus)
+        mlflow.log_param('test_with_random_z', opts.test_with_random_z)
+        mlflow.log_param('test_on_dataset', opts.test_on_dataset)
+        mlflow.log_param('autoencoder_model', opts.autoencoder_model)
+
+
+        latent = consts.CLIP_EMBEDDING_DIMS[opts.semantic_architecture]
+        if opts.spherical_coordinates:
+            latent -= 1
+        mixing = 0.9
+        batch = opts.batch_size
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        clip_model, preprocess = clip.load(opts.semantic_architecture, device=device)
+        # _, test_preprocess = clip.load(opts.semantic_architecture, device='cpu')
+        # preprocess.transforms[-1] = transforms.Normalize([0.5065, 0.4118, 0.3635], [0.3436, 0.3095, 0.3044])
+        preprocess.transforms[-1] = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        # print(preprocess)
+        clip_model.cuda()
+
+        # mapping = get_realnvp(512, latent, opts.mapping_depth, opts.hidden_dim)
+
+        w_latent_dim = opts.w_latent_dim
+
+
+
+        train_ds = setup_dataset(opts.train_dataset_path, preprocess, opts)
+        test_ds = setup_dataset(opts.test_dataset_path, preprocess, opts)
+        model_store = LocalModelStore('stylegan2', opts.experiment_name, opts.exp_dir)
+
+        if not opts.W_plus:
+            mapping = RealNVP(opts.n_blocks, w_latent_dim, opts.hidden_dim, opts.n_hidden, latent,
+                              batch_norm=not opts.no_batch_norm)
+            mapping.cuda()
+            if opts.mapping_ckpt is not None:
+                mapping, _, _, _ = model_store.load_model_and_optimizer_loc(mapping, model_location=opts.mapping_ckpt)
+            optim = optim.Adam(
+                mapping.parameters(),
+                lr=opts.lr,
+                betas=(0.9, 0.999),
+            )
+            decoder = Generator(1024, 512, 8)
+            decoder.to(device)
+            stylegan_weights = './models/stylegan2/stylegan2-ffhq-config-f.pt'
+            ckpt = torch.load(stylegan_weights)
+            decoder.load_state_dict(ckpt['g_ema'], strict=False)
+            # decoder.load_state_dict(ckpt["g"])
+            latent_avg = ckpt['latent_avg'].to(device)
+
+            trainer = RandomFlowCoach(opts,
+                                      clip_model,
+                                      mapping,
+                                      decoder,
+                                      optim,
+                                      torch.optim.lr_scheduler.StepLR(optim, opts.lr_reduce_step),
+                                      test_ds,
+                                      ImageLogger(os.path.join(opts.exp_dir, opts.experiment_name, 'image_sample')),
+                                      model_store,
+                                      GradientManager(opts),
+                                      opts.product_image_size,
+                                      opts.save_interval, None, opts.board_interval, opts.image_interval, 1000,
+                                      opts.val_interval)
+            # opts.embedding_norm_path
+
+        else:
+            if opts.autoencoder_model == 'e4e':
+                print("Using E4E autoencoder")
+                autoencoder, args = setup_model(consts.model_paths['e4e_checkpoint_path'], consts.model_paths['stylegan_weights'])
+            elif opts.autoencoder_model == 'psp':
+                print("Using PSP autoencoder")
+                autoencoder = get_psp()
+            autoencoder.cuda()
+            mappers = []
+            optims = []
+            for i in range(18):
+                mapping = RealNVP(opts.n_blocks, w_latent_dim, opts.hidden_dim, opts.n_hidden, latent,
+                                  batch_norm=not opts.no_batch_norm)
+
+                mapping.cuda()
+                if opts.start_epoch > 0:
+                    model_store.load_model_and_optimizer(mapping, epoch=opts.start_epoch-1, label=f'{i}_flow_model_mapping')
+                mappers.append(mapping)
+                # if opts.mapping_ckpt is not None:
+                #     mapping, _, _, _ = model_store.load_model_and_optimizer_loc(mapping, model_location=opts.mapping_ckpt)
+                optims.append(optim.Adam(
+                    mapping.parameters(),
+                    lr=opts.lr,
+                    betas=(0.9, 0.999),
+                ))
+            image_logger = ImageLogger(os.path.join(opts.exp_dir, opts.experiment_name, 'image_sample'))
+
+            # texts = ['barack obama', 'black', 'president', 'obama', 'akon'] + ['red hair woman', 'redheaded woman', 'redhead woman', 'Amy Adams'] + ['Asian'] + ['Old man', 'Old man with glasses', 'glasses', 'Bald']
+            # for text in tqdm(texts):
+            #     grad_man = GradientManager(opts)
+            #     text_to_image(clip_model, text, autoencoder, mappers, image_logger, grad_man, 2)
+            # obama_ds = DataLoader(
+            #     datasets.ImageFolder('/home/ssd_storage/datasets/celebA_barack_obama', preprocess),
+            #     batch_size=1,
+            #     num_workers=4,
+            #     pin_memory=True,
+            #     shuffle=False)
+            # text_invert_compare(clip_model, texts, autoencoder, mappers, grad_man, obama_ds, 1)
+
+            trainer = WPlusFlowCoach(opts,
+                                     clip_model,
+                                     mappers,
+                                     autoencoder,
+                                     optims,
+                                     [torch.optim.lr_scheduler.StepLR(optim, opts.lr_reduce_step) for optim in optims],
+                                     train_ds,
+                                     test_ds,
+                                     image_logger,
+                                     model_store,
+                                     GradientManager(opts),
+                                     opts.product_image_size,
+                                     opts.save_interval, None, opts.board_interval, opts.image_interval, 1000,
+                                     opts.val_interval)
+
+        trainer.train(opts.start_epoch, opts.max_steps)
