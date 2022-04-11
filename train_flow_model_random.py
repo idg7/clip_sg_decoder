@@ -28,7 +28,7 @@ def get_args():
     parser = ArgumentParser()
     parser.add_argument('--exp_dir', default='/home/ssd_storage/experiments/clip_decoder', type=str,
                         help='Path to experiment output directory')
-    parser.add_argument('--experiment_name', type=str, default='clip_decoder',
+    parser.add_argument('--experiment_name', type=str, default='memory_decoder',
                         help='The specific name of the experiment')
 
     parser.add_argument('--num_batches_per_epoch', default=250, type=int, help='num batches per epoch')
@@ -55,18 +55,26 @@ def get_args():
     parser.add_argument('--save_interval', default=25, type=int, help='Model checkpoint interval (epochs)')
     # parser.add_argument('--train_dataset_path', default='/home/ssd_storage/datasets/celebA_crops', type=str,
     #                     help='path to the train dir')
-    parser.add_argument('--test_dataset_path', default='/home/ssd_storage/datasets/celebA_crops', type=str,
-                        help='path to the validation dir')
+    # parser.add_argument('--test_dataset_path', default='/home/ssd_storage/datasets/celebA_crops', type=str,
+    #                     help='path to the validation dir')
     # parser.add_argument('--test_dataset_path', default='/home/ssd_storage/datasets/ffhq', type=str,
     #                     help='path to the validation dir')
     # parser.add_argument('--test_dataset_path',
     #                     default="/home/administrator/datasets/processed/vggface2_discriminator min_size=400_num-classes_1250_{'train': 300, 'val': 50, 'test': 50}_crops/test",
     #                     type=str,
     #                     help='path to the train dir')
+    # parser.add_argument('--train_dataset_path',
+    #                     default="/home/ssd_storage/datasets/processed/clip_familiar_vggface2_{'train': 0.7, 'val': 0.2, 'test': 0.1}/train",
+    #                     type=str,
+    #                     help='path to the train dir')
+
     parser.add_argument('--train_dataset_path',
-                        default="/home/ssd_storage/datasets/processed/clip_familiar_vggface2_{'train': 0.7, 'val': 0.2, 'test': 0.1}/train",
+                        default="/home/ssd_storage/datasets/processed/Idan_neuroscience_workshop/clip_familiar_vggface2_{'train': 0.7, 'val': 0.2, 'test': 0.1}/train",
                         type=str,
                         help='path to the train dir')
+    parser.add_argument('--test_dataset_path', default='/home/ssd_storage/datasets/celebA_crops', type=str,
+                        help='path to the validation dir')
+
     parser.add_argument("--lr_reduce_step", type=int, default=25000, help="after how many steps to reduce lr")
     parser.add_argument("--w_latent_dim", type=int, default=512, help="dim of w latent space")
     parser.add_argument("--mixing", type=float, default=0.9, help="probability of latent code mixing")

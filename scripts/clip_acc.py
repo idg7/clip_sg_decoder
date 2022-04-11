@@ -41,6 +41,15 @@ def rdm_dists(model: clip.model.CLIP, dataset: DataLoader):
     return pd.DataFrame(res, columns=labels, index=labels)
 
 
+def cosine_dist(emb1: torch.Tensor, emb2: torch.Tensor) -> float:
+    emb1 = emb1 / emb1.norm(dim=1, p=2)[:, None]
+    emb2 = emb2 / emb2.norm(dim=1, p=2)[:, None]
+    relu = torch.nn.ReLU()
+    return float(relu(1 - emb1 @ emb2.T))
+
+def l2_dist(emb1: torch.Tensor, emb2: torch.Tensor) -> float:
+    return float((emb1 - emb2).norm(p=2))
+
 def measure_dists(model: clip.model.CLIP, dataset: DataLoader):
     labels = []
     dists = []
@@ -53,11 +62,9 @@ def measure_dists(model: clip.model.CLIP, dataset: DataLoader):
         emb2 = model.encode_image(img2)
         emb1 = emb1.float()
         emb2 = emb2.float()
-
-        emb1 = emb1 / emb1.norm(dim=1, p=2)[:, None]
-        emb2 = emb2 / emb2.norm(dim=1, p=2)[:, None]
-        relu = torch.nn.ReLU()
-        dists.append(float(relu(1 - emb1 @ emb2.T)))
+        # curr_dist = l2_dist(emb1, emb2)
+        curr_dist = cosine_dist(emb1, emb2)
+        dists.append(curr_dist)
         labels.append(label)
     return pd.DataFrame({'cos_dists': dists, 'isSame': labels})
 
