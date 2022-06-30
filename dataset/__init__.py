@@ -1,1 +1,2 @@
-from dataset.data_setup import setup_dataset, setup_img2txt_dataset, setup_img_txt_cls_dataset
+from dataset.data_setup import setup_dataset, setup_img2txt_dataset, setup_img_txt_cls_dataset, setup_2imgs_dataset, setup_simple_ds, setup_2models_dataset
+from .celeba_dataset import CelebADataset

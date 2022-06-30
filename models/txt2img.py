@@ -10,19 +10,18 @@ from models.realNVP import RealNVP, predict
 class Txt2Img(nn.Module):
     def __init__(self,
                  txt2img: RealNVP,
-                 clip_model: clip.model.CLIP,
+                 txt_encoder: nn.Module,
                  clip_inversion: CLIPInversionGenerator,
                  test_with_random_z: bool):
         super(Txt2Img, self).__init__()
         self.txt2img = txt2img
-        self.clip_model = clip_model
+        self.txt_encoder = txt_encoder
         self.clip_inversion = clip_inversion
         self.test_with_random_z = test_with_random_z
 
     def predict2(self, labels: List[str]):
         # print(labels)
-        txt_tokens = clip.tokenize(labels).cuda(non_blocking=True)
-        txt_embeddings = self.clip_model.encode_text(txt_tokens)
+        txt_embeddings = self.txt_encoder.encode_text(labels)
         img_hat_embedding = predict(self.txt2img, txt_embeddings)
         # print(img_hat_embedding.shape)
         # normalized_embeddings = img_hat_embedding / img_hat_embedding.norm(p=2, dim=1)[:, None]
@@ -31,14 +30,10 @@ class Txt2Img(nn.Module):
         return y_hat
 
     def predict(self, txt: List[str]):
-
-        txt_tokens = clip.tokenize(txt).cuda(non_blocking=True)
         log_probs = 0.0
         loss_dict = {}
-        txt_embeddings = self.clip_model.encode_text(txt_tokens)
+        txt_embeddings = self.txt_encoder.encode_text(labels)
         img_clip_embedding = predict(self.txt2img, txt_embeddings)
-
-
 
         txt2img_loss = -self.txt2img.log_prob(img_clip_embedding, txt_embeddings).mean()
         txt2img_loss = txt2img_loss.mean()

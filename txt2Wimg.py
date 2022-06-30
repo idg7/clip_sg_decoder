@@ -3,8 +3,9 @@ from tqdm import tqdm
 from glob import glob
 from torchvision import transforms
 
-from models import RealNVP, get_psp, Txt2WImg
+from models import RealNVP, get_psp, Txt2WImg,  clip_txt_encoder, get_txt_encoder
 from models.e4e.model_utils import setup_model
+import util
 
 from dataset import setup_img2txt_dataset
 from image_saver import ImageLogger
@@ -24,7 +25,9 @@ def get_args():
     parser = ArgumentParser()
     parser.add_argument('--exp_dir', default='/home/ssd_storage/experiments/clip_decoder', type=str,
                         help='Path to experiment output directory')
-    parser.add_argument('--experiment_name', type=str, default='clip txt2W+ decoder',
+    parser.add_argument('--experiment_name', type=str, default='txt2w',
+                        help='The specific name of the experiment')
+    parser.add_argument('--run_name', type=str, default='gpt2-xl predict',
                         help='The specific name of the experiment')
 
     parser.add_argument('--num_batches_per_epoch', default=250, type=int, help='num batches per epoch')
@@ -86,6 +89,11 @@ def get_args():
                         help='When predicting clip picture - attempt to recreate from test dataset')
     parser.add_argument('--clip_on_orig', action='store_false', help='epoch to start form')
     parser.add_argument('--autoencoder_model', default='e4e', type=str, help='e4e / psp')
+    
+    parser.add_argument('--txt_architecture', type=str, default=None)
+    parser.add_argument('--embedding_reduction', type=str, default='last')
+    parser.add_argument('--txt2w_weights_path', type=str, default='/home/ssd_storage/experiments/clip_decoder/mlflow/artifact_store/txt2w/gpt2 to W/18f5d5d63e4146a99001e79485badcd7/artifacts/{}_flow_model_mapping174.pth')
+    
 
     return parser.parse_args()
 
@@ -98,21 +106,7 @@ if __name__ == '__main__':
     mlflow.set_experiment(opts.experiment_name)
 
     with mlflow.start_run():
-        # mlflow.log_param('mapping_depth', opts.mapping_depth)
-        mlflow.log_param('train_dataset_path', opts.train_dataset_path)
-        mlflow.log_param('test_dataset_path', opts.test_dataset_path)
-        mlflow.log_param('semantic_architecture', opts.semantic_architecture)
-        mlflow.log_param('n_hidden', opts.n_hidden)
-        mlflow.log_param('n_blocks', opts.n_blocks)
-        mlflow.log_param('hidden_dim', opts.hidden_dim)
-        mlflow.log_param('batch_size', opts.batch_size)
-        mlflow.log_param('no_batch_norm', opts.no_batch_norm)
-        mlflow.log_param('semantic_architecture', opts.semantic_architecture)
-        mlflow.log_param('semantic_architecture', opts.semantic_architecture)
-        mlflow.log_param('embedding_norm_path', opts.embedding_norm_path)
-        mlflow.log_param('test_with_random_z', opts.test_with_random_z)
-        mlflow.log_param('test_on_dataset', opts.test_on_dataset)
-        mlflow.log_param('autoencoder_model', opts.autoencoder_model)
+        mlflow.log_params(vars(opts))
 
         latent = consts.CLIP_EMBEDDING_DIMS[opts.semantic_architecture]
         mixing = 0.9
@@ -121,12 +115,15 @@ if __name__ == '__main__':
 
         clip_model, preprocess = clip.load(opts.semantic_architecture, device=device)
         preprocess.transforms[-1] = transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-        clip_model.cuda()
+        if opts.txt_architecture is None:
+            txt_model = clip_txt_encoder(clip_model)
+        else:
+            txt_model = get_txt_encoder(opts.txt_architecture, opts.embedding_reduction)
+            latent = consts.TXT_EMBEDDING_DIMS[opts.txt_architecture]
+        txt_model.cuda()
 
         w_latent_dim = opts.w_latent_dim
 
-        train_ds = setup_img2txt_dataset(opts.train_dataset_path, opts.train_dataset_labels_path, preprocess, opts)
-        test_ds = setup_img2txt_dataset(opts.test_dataset_path, opts.test_dataset_labels_path, preprocess, opts)
         model_store = LocalModelStore('stylegan2', opts.experiment_name, opts.exp_dir)
 
         if opts.autoencoder_model == 'e4e':
@@ -143,18 +140,18 @@ if __name__ == '__main__':
                               batch_norm=not opts.no_batch_norm)
 
             mapping.cuda()
-            if opts.start_epoch > 0:
-                model_store.load_model_and_optimizer(mapping, epoch=opts.start_epoch - 1,
-                                                     label=f'{i}_flow_model_mapping')
+            if opts.txt2w_weights_path is not None:
+                model_store.load_model_and_optimizer_loc(mapping, model_location=opts.txt2w_weights_path.format(i))
             mappers.append(mapping)
         image_logger = ImageLogger(os.path.join(opts.exp_dir, opts.experiment_name, 'image_sample'))
 
-        txt2img_generator = Txt2WImg(clip_model, autoencoder, mappers, transforms.Resize((256, 256)))
+        txt2img_generator = Txt2WImg(txt_model, autoencoder, mappers, transforms.Resize((256, 256)))
 
         txt2img_generator = txt2img_generator.cuda()
 
         txt2img_generator.train(False)
         txt2img_generator.requires_grad_(False)
+        img_log_dir = os.path.join(opts.exp_dir, opts.experiment_name, 'image_sample')
 
         people = ['Ray Romano', 'Ray_Romano', 'Tom Hardy', 'Tom_Hardy', 'AKON', 'akon', 'Akon']
         hair = ['Blonde', 'Red hair', 'Ginger', 'Black hair', 'Bald', 'Grey hair', 'Beard']
@@ -164,19 +161,46 @@ if __name__ == '__main__':
         eyes = ['Blue eyes', 'Brown eyes', 'Green eyes', 'Sunglasses', 'Glasses']
         behavioral = ['Smiling', 'Laughing', 'Frowning', 'crying', 'Happy', 'Sad', 'Angry', 'Mad']
         personality = ['Nice', 'Mean', 'Smart', 'Dumb', 'Good', 'Bad']
-        celebA = [os.path.basename(pth) for pth in glob('/home/ssd_storage/datasets/celebA/*')]
-        uri = ['Man with red hair and brown eyes', 'Man with brown eyes and red hair',
-               'Woman with red hair and brown eyes', 'Woman with brown eyes and red hair']
-        txt_input = behavioral + personality + ['Man with red hair and black beard',
-                                                'Man with black beard and red hair'] + eyes + uri + hair + people + hair + ethnicity + gender + joined #+ celebA
+        # celebA = [os.path.basename(pth) for pth in glob('/home/ssd_storage/datasets/celebA/*')]
+        uri = ['Man with red hair and brown eyes', 'Man with brown eyes and red hair', 'Woman with red hair and brown eyes', 'Woman with brown eyes and red hair']
+        txt_input = ['big nose', 'short forehead', 'fat', 'big ears', 'big eyes', 'thick eyebrows'] + behavioral + personality + ['Man with red hair and black beard', 'Man with black beard and red hair'] + eyes + hair + people + hair + uri + ethnicity + gender + joined + ['Donald_Trump', 'Barack Obama', 'angela_rayner', 'angelina_jolie', 'anthony_hopkins', 'bill_clinton', 'boris_johnson', 'david_cameron', 'donald_trump', 'esther_mcvey', 'george_W_bush', 'hillary_clinton', 'Hugh_Grant','jennifer_aniston','Judi_Dench','Kate_Winslet','keira_knightley','liam_neeson','Martin_Freeman','michael_caine','nicolas_cage','nicola_sturgeon','priti_patel','robert_de_niro','sandra_bullock','theresa_may','tom_hanks']
 
         with torch.no_grad():
+            consts.PREDICT_WITH_RANDOM_Z = False
             for i, label in tqdm(enumerate(txt_input)):
                 for j, z_status in enumerate([False, True]):
                     consts.PREDICT_WITH_RANDOM_Z = z_status
                     curr_input = [label] * 2
                     generated, _, _ = txt2img_generator(curr_input)
-                    image_logger.parse_and_log_images(generated, generated, step=i,
-                                                      title=f'{label}, random z={z_status}', names=curr_input)
+                    
+                    img = util.tensor2im(generated[0])
+                    path = os.path.join(img_log_dir, f'{label}_random_z={z_status}.jpg')
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    img.save(path)
+                    mlflow.log_artifact(path)
+
+
+        # people = ['Ray Romano', 'Ray_Romano', 'Tom Hardy', 'Tom_Hardy', 'AKON', 'akon', 'Akon']
+        # hair = ['Blonde', 'Red hair', 'Ginger', 'Black hair', 'Bald', 'Grey hair', 'Beard']
+        # ethnicity = ['African american', 'Indian', 'Jewish', 'Caucasian', 'Asian']
+        # gender = ['Man', 'Woman']
+        # joined = ['African american woman', 'African man', 'Blonde woman', 'Brunette man']
+        # eyes = ['Blue eyes', 'Brown eyes', 'Green eyes', 'Sunglasses', 'Glasses']
+        # behavioral = ['Smiling', 'Laughing', 'Frowning', 'crying', 'Happy', 'Sad', 'Angry', 'Mad']
+        # personality = ['Nice', 'Mean', 'Smart', 'Dumb', 'Good', 'Bad']
+        # celebA = [os.path.basename(pth) for pth in glob('/home/ssd_storage/datasets/celebA/*')]
+        # uri = ['Man with red hair and brown eyes', 'Man with brown eyes and red hair',
+        #        'Woman with red hair and brown eyes', 'Woman with brown eyes and red hair']
+        # txt_input = behavioral + personality + ['Man with red hair and black beard',
+        #                                         'Man with black beard and red hair'] + eyes + uri + hair + people + hair + ethnicity + gender + joined #+ celebA
+
+        # with torch.no_grad():
+        #     for i, label in tqdm(enumerate(txt_input)):
+        #         for j, z_status in enumerate([False, True]):
+        #             consts.PREDICT_WITH_RANDOM_Z = z_status
+        #             curr_input = [label] * 2
+        #             generated, _, _ = txt2img_generator(curr_input)
+        #             image_logger.parse_and_log_images(generated, generated, step=i,
+        #                                               title=f'{label}, random z={z_status}', names=curr_input)
 
 

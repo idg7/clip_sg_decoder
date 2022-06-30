@@ -20,8 +20,7 @@ class Txt2WImg(nn.Module):
         self.autoencoder_facepool = autoencoder_facepool
 
     def predict(self, labels: List[str]) -> Tuple[Tensor, float, Dict[str, float]]:
-        txt_tokens = clip.tokenize(labels).cuda(non_blocking=True)
-        txt_embeddings = self.clip_model.encode_text(txt_tokens)
+        txt_embeddings = self.clip_model.encode_text(labels)
 
         log_probs = 0.0
         loss_dict = {}

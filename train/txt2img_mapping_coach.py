@@ -80,7 +80,7 @@ class Txt2ImgFlowCoach(object):
         num_batches = len(dataset)
         if 0 < self.max_batch_per_epoch < num_batches:
             num_batches = self.max_batch_per_epoch
-        mlflow.log_param('num_batches_per_epoch', num_batches)
+        # mlflow.log_param('num_batches_per_epoch', num_batches)
         return num_batches
 
     def __log_images(self,
@@ -134,10 +134,10 @@ class Txt2ImgFlowCoach(object):
         normalized_img_hat_embeddings = normalized_img_hat_embeddings / normalized_img_hat_embeddings.norm(dim=1, p=2)[:, None]
         normalized_txt_embeddings = normalized_txt_embeddings / normalized_txt_embeddings.norm(dim=1, p=2)[:, None]
 
-        orig_cossim = torch.mm(normalized_img_embeddings, normalized_txt_embeddings.transpose(0, 1))
-        prediction_cossim = torch.mm(normalized_img_embeddings, normalized_img_hat_embeddings.transpose(0, 1))
-        loss_dict[f'{label} mean txt-img cossim'] = float(torch.mean(torch.diagonal(orig_cossim)))
-        loss_dict[f'{label} mean predicted cossim'] = float(torch.mean(torch.diagonal(prediction_cossim)))
+        # orig_cossim = torch.mm(normalized_img_embeddings, normalized_txt_embeddings.transpose(0, 1))
+        # prediction_cossim = torch.mm(normalized_img_embeddings, normalized_img_hat_embeddings.transpose(0, 1))
+        # loss_dict[f'{label} mean txt-img cossim'] = float(torch.mean(torch.diagonal(orig_cossim)))
+        # loss_dict[f'{label} mean predicted cossim'] = float(torch.mean(torch.diagonal(prediction_cossim)))
 
         if train:
             self.txt2img_mapper.zero_grad()
@@ -153,7 +153,7 @@ class Txt2ImgFlowCoach(object):
         for key in iter:
             if key not in total:
                 total[key] = 0
-            total[key] += iter[key] / count
+            total[key] += iter[key]
         return total
 
     def epoch(self, num_batches: int, train: bool):
@@ -186,6 +186,8 @@ class Txt2ImgFlowCoach(object):
 
                 if (self.global_step % self.metric_log_freq) == 0:
                     mlflow.log_metric('Loss', float(loss_report) / count, self.global_step)
+                    for key in cumulative_loss_dict:
+                        cumulative_loss_dict[key] = cumulative_loss_dict[key] / count
                     mlflow.log_metrics(cumulative_loss_dict, self.global_step)
                     loss_report = 0
                     count = 0

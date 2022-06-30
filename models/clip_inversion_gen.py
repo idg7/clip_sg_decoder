@@ -9,11 +9,12 @@ class CLIPInversionGenerator(nn.Module):
     def __init__(self,
                  autoencoder: nn.Module,
                  mappers: List[RealNVP],
-                 autoencoder_facepool: nn.Module):
+                 autoencoder_facepool: nn.Module, return_latents: bool = False):
         super(CLIPInversionGenerator, self).__init__()
         self.autoencoder = autoencoder
         self.mappers = torch.nn.ModuleList(mappers)
         self.autoencoder_facepool = autoencoder_facepool
+        self.return_latents = return_latents
 
     def predict(self, x: Tensor):
         x_embedding = x
@@ -30,8 +31,10 @@ class CLIPInversionGenerator(nn.Module):
             w.append(y_hat_latents)
 
         w = torch.stack(w, dim=1)
-        y_hat, _ = self.autoencoder(w, input_code=True, return_latents=True)
+        y_hat, y_latents = self.autoencoder(w, resize=False, input_code=True, return_latents=True)
         log_probs = -log_probs
+        if self.return_latents:
+            return y_hat, log_probs, loss_dict, y_latents
         return y_hat, log_probs, loss_dict
 
     def forward(self, x: Tensor):

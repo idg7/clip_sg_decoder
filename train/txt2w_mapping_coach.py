@@ -99,7 +99,7 @@ class Text2WFlowCoach(object):
         num_batches = len(dataset)
         if 0 < self.max_batch_per_epoch < num_batches:
             num_batches = self.max_batch_per_epoch
-        mlflow.log_param('num_batches_per_epoch', num_batches)
+        # mlflow.log_param('num_batches_per_epoch', num_batches)
         return num_batches
 
     def __log_images(self,
@@ -107,8 +107,7 @@ class Text2WFlowCoach(object):
                      labels: List[str],
                      x: Tensor):
         with torch.no_grad():
-            txt_tokens = clip.tokenize(labels).cuda(non_blocking=True)
-            txt_embedding = self.encoder.encode_text(txt_tokens)
+            txt_embedding = self.encoder.encode_text(labels).float()
             w = []
             for mapper in self.mappers:
                 w.append(predict(mapper, txt_embedding))
@@ -130,8 +129,7 @@ class Text2WFlowCoach(object):
 
         loss_dict = {}
         x = x.cuda(non_blocking=True)
-        tokenized = clip.tokenize(txt).cuda(non_blocking=True)
-        txt_embeddings = self.encoder.encode_text(tokenized).float()
+        txt_embeddings = self.encoder.encode_text(txt).float()
         y, y_latents = self.autoencoder(self.face_pool(x), return_latents=True)
         log_probs = 0
         loss = 0
@@ -157,8 +155,7 @@ class Text2WFlowCoach(object):
 
         y, y_latents = self.autoencoder(self.face_pool(x), return_latents=True)
 
-        tokenized = clip.tokenize(txt).cuda(non_blocking=True)
-        txt_embeddings = self.encoder.encode_text(tokenized).float()
+        txt_embeddings = self.encoder.encode_text(txt).float()
 
         loss_dict = {}
         total_loss = 0

@@ -1,7 +1,6 @@
 import torch.utils.data
 import glob
 import os
-from skimage import io
 from PIL import Image
 
 
