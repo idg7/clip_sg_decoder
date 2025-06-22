@@ -27,7 +27,7 @@ def get_args():
                         help='Path to experiment output directory')
     parser.add_argument('--experiment_name', type=str, default='txt2w',
                         help='The specific name of the experiment')
-    parser.add_argument('--run_name', type=str, default='gpt2-xl predict',
+    parser.add_argument('--run_name', type=str, default='sgpt predict',
                         help='The specific name of the experiment')
 
     parser.add_argument('--num_batches_per_epoch', default=250, type=int, help='num batches per epoch')
@@ -92,7 +92,7 @@ def get_args():
     
     parser.add_argument('--txt_architecture', type=str, default=None)
     parser.add_argument('--embedding_reduction', type=str, default='last')
-    parser.add_argument('--txt2w_weights_path', type=str, default='/home/ssd_storage/experiments/clip_decoder/mlflow/artifact_store/txt2w/gpt2 to W/18f5d5d63e4146a99001e79485badcd7/artifacts/{}_flow_model_mapping174.pth')
+    parser.add_argument('--txt2w_weights_path', type=str, default='/home/ssd_storage/experiments/clip_decoder/mlflow/artifact_store/txt2w/gpt2 to W/e735f1bb1fc84b4198d43c56abcbdd73/artifacts/{}_flow_model_mapping199.pth')
     
 
     return parser.parse_args()

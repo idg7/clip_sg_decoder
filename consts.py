@@ -24,6 +24,7 @@ TXT_EMBEDDING_DIMS = {
     'bert-large-uncased': 1024,
     'roberta-base': 768,
     'roberta-large': 1024,
+    'sgpt': 2048,
 }
 
 CLIP_IMAGE_RESOLUTION = {

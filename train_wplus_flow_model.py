@@ -30,7 +30,7 @@ def get_args():
                         help='Path to experiment output directory')
     parser.add_argument('--experiment_name', type=str, default='memory_decoder',
                         help='The specific name of the experiment')
-    parser.add_argument('--run_name', type=str, default='All CelebA-HQ clip2W+',
+    parser.add_argument('--run_name', type=str, default='clip familiar CelebA-HQ mtcnn clip2W+',
                         help='The specific name of the experiment')
 
     parser.add_argument('--num_batches_per_epoch', default=250, type=int, help='num batches per epoch')
@@ -171,8 +171,10 @@ if __name__ == '__main__':
             train_ds = setup_2models_dataset(opts.train_encoder_imgs_paths, opts.train_dataset_path, clip_preprocess, e4e_preprocess, opts)
             test_ds = setup_2models_dataset(opts.train_encoder_imgs_paths, opts.train_dataset_path, clip_preprocess, e4e_preprocess, opts)
         else:
-            train_ds = setup_2imgs_dataset(opts.train_dataset_path, clip_preprocess, e4e_preprocess, opts)
-            test_ds = setup_2imgs_dataset(opts.test_dataset_path, clip_preprocess, e4e_preprocess, opts)
+            # train_ds = setup_2imgs_dataset(opts.train_dataset_path, clip_preprocess, e4e_preprocess, opts)
+            # test_ds = setup_2imgs_dataset(opts.test_dataset_path, clip_preprocess, e4e_preprocess, opts)
+            train_ds = setup_2models_dataset(opts.train_encoder_imgs_paths, opts.train_dataset_path, clip_preprocess, e4e_preprocess, opts)
+            test_ds = setup_2models_dataset(opts.train_encoder_imgs_paths, opts.train_dataset_path, clip_preprocess, e4e_preprocess, opts)
         model_store = LocalModelStore(opts.experiment_name, 'weights', opts.exp_dir)
 
         

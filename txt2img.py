@@ -135,7 +135,7 @@ if __name__ == '__main__':
         print('creating clip model...')
         txt_model, preprocess = clip.load(opts.semantic_architecture, device=device)
         if opts.txt_architecture is None:
-            txt_model = clip_txt_encoder(clip_model)
+            txt_model = clip_txt_encoder(txt_model)
         else:
             txt_model = get_txt_encoder(opts.txt_architecture, opts.embedding_reduction)
             txt_latent = consts.TXT_EMBEDDING_DIMS[opts.txt_architecture]
@@ -193,6 +193,12 @@ if __name__ == '__main__':
         # celebA = [os.path.basename(pth) for pth in glob('/home/ssd_storage/datasets/celebA/*')]
         uri = ['Man with red hair and brown eyes', 'Man with brown eyes and red hair', 'Woman with red hair and brown eyes', 'Woman with brown eyes and red hair']
         txt_input = ['big nose', 'short forehead', 'fat', 'big ears', 'big eyes', 'thick eyebrows'] + behavioral + personality + ['Man with red hair and black beard', 'Man with black beard and red hair'] + eyes + hair + people + hair + uri + ethnicity + gender + joined + ['Donald_Trump', 'Barack Obama', 'angela_rayner', 'angelina_jolie', 'anthony_hopkins', 'bill_clinton', 'boris_johnson', 'david_cameron', 'donald_trump', 'esther_mcvey', 'george_W_bush', 'hillary_clinton', 'Hugh_Grant','jennifer_aniston','Judi_Dench','Kate_Winslet','keira_knightley','liam_neeson','Martin_Freeman','michael_caine','nicolas_cage','nicola_sturgeon','priti_patel','robert_de_niro','sandra_bullock','theresa_may','tom_hanks']
+        jobs = ['Dentist','Waiter','Paramedic','Nurse','Electrician','Doorman','Cameraman','Diver','Librarian','Baker','Architect','Secretary','Health Services Manager','Accountant','Human Resources','Engineer','Gardner','Postman','Mechanic',]
+        pos_traits = ['Agreeable','Attractive','Calm','Charismatic','Cheerful','Confident','Creative','Dramatic','Empathetic','Faithful','Friendly','Generous','Honest','Humble','Intelligent','Loyal','Optimistic','Organized',"Perfectionist",'Playful','Popular','Romantic','Spontaneous','Strong','Sweet']
+        neutral_traits = ['Aggressive','Ambitious','Competitive','Emotional','Stubborn',"Unpredictable",]
+        neg_traits = ['Anxious','Argumentative','Arrogant','Bizarre','Childish','Clumsy',"Cruel",'Desperate','Dull','Impatient','Insecure','Messy','Miserable','Paranoid','Passive','Pedantic','Procrastinating','Selfish','Shallow','Shy','Vulnerable']
+        subj = ['Destined for Broadway','Married more than once','Has a dog','Has a cat','Likes children','Hates standing in line','Shopaholic','Lives in the USA','Goes to clubs','In a serious relationship','Afraid of spiders','Vegan','Hugger','Likes broccoli','In jail','Drives a Lamborghini','Has a gym membership','Influencer']
+        txt_input = jobs + pos_traits + neutral_traits + neg_traits + subj
 
         with torch.no_grad():
             consts.PREDICT_WITH_RANDOM_Z = False

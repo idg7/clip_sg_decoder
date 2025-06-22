@@ -156,6 +156,62 @@ def unfamiliar_lfw_acc():
         pairs.append((im1[i], im2[i]))
     get_lfw_model_acc(lfw_path, pairs, labels)
 
+def most_unfamiliar_lfw_acc():
+    pairs_file_path = '/home/ssd_storage/datasets/lfw/most_unfam.csv'
+    lfw_path = '/home/ssd_storage/datasets/lfw/CLIP_ViT_B32_Unfamiliar'
+    pairs_list = pd.read_csv(pairs_file_path, sep=',')
+    im1 = pairs_list['img1'].to_list()
+    im2 = pairs_list['img2'].to_list()
+    labels = pairs_list['same'].to_list()
+    pairs = []
+    for i in range(len(im1)):
+        pairs.append((im1[i], im2[i]))
+    get_lfw_model_acc(lfw_path, pairs, labels)
+
+def least_unfamiliar_lfw_acc():
+    pairs_file_path = '/home/ssd_storage/datasets/lfw/least_unfam_2_1.csv'
+    lfw_path = '/home/ssd_storage/datasets/lfw/CLIP_ViT_B32_Unfamiliar'
+    pairs_list = pd.read_csv(pairs_file_path, sep=',')
+    im1 = pairs_list['img1'].to_list()
+    im2 = pairs_list['img2'].to_list()
+    labels = pairs_list['same'].to_list()
+    pairs = []
+    for i in range(len(im1)):
+        pairs.append((im1[i], im2[i]))
+    get_lfw_model_acc(lfw_path, pairs, labels)
+
+def most_familiar_lfw_acc():
+    pairs_file_path = '/home/ssd_storage/datasets/lfw/most_familiar_1.csv'
+    lfw_path = '/home/ssd_storage/datasets/lfw/CLIP_ViT_B32_most_familiar'
+    pairs_list = pd.read_csv(pairs_file_path, sep=',')
+    im1 = pairs_list['img1'].to_list()
+    im2 = pairs_list['img2'].to_list()
+    labels = pairs_list['same'].to_list()
+    pairs = []
+    for i in range(len(im1)):
+        pairs.append((im1[i], im2[i]))
+    get_lfw_model_acc(lfw_path, pairs, labels)
+
+def least_familiar_lfw_acc():
+    pairs_file_path = '/home/ssd_storage/datasets/lfw/least_familiar_1.csv'
+    lfw_path = '/home/ssd_storage/datasets/lfw/CLIP_ViT_B32_least_familiar'
+    pairs_list = pd.read_csv(pairs_file_path, sep=',')
+    im1 = pairs_list['img1'].to_list()
+    im2 = pairs_list['img2'].to_list()
+    labels = pairs_list['same'].to_list()
+    pairs = []
+    for i in range(len(im1)):
+        pairs.append((im1[i], im2[i]))
+    get_lfw_model_acc(lfw_path, pairs, labels)
+
 if __name__ == '__main__':
     with torch.no_grad():
-        unfamiliar_lfw_acc()
+        # print("MOST unfam")
+        # most_unfamiliar_lfw_acc()
+        print("MOST familiar")
+        most_familiar_lfw_acc()
+        print('\n\n\n')
+        # print("LEAST unfam")
+        # least_unfamiliar_lfw_acc()
+        print("LEAST familiar")
+        least_familiar_lfw_acc()

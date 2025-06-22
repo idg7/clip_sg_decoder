@@ -26,7 +26,7 @@ def get_args():
                         help='Path to experiment output directory')
     parser.add_argument('--experiment_name', type=str, default='memory_decoder',
                         help='The specific name of the experiment')
-    parser.add_argument('--run_name', type=str, default='txt2img',
+    parser.add_argument('--run_name', type=str, default='clip familiar CelebA-HQ mtcnn clip2W+ mean images',
                         help='The name of the specific run')
 
     parser.add_argument('--num_batches_per_epoch', default=250, type=int, help='num batches per epoch')
@@ -91,8 +91,11 @@ def get_args():
                         help='hidden dim in s,t for conditional normalizing flow')
     # parser.add_argument('--clip2w_weights_path', default='/home/ssd_storage/experiments/clip_decoder/clip_decoder/stylegan2/models/{}_flow_model_mapping174.pth', type=str,
     #                     help='dir with clip2w weights')
-    parser.add_argument('--clip2w_weights_path', default='/home/ssd_storage/experiments/clip_decoder/mlflow/artifact_store/memory_decoder/3e4a65b5470d421db0b9c4eaf82c5737/artifacts/{}_flow_model_mapping199.pth', 
+    # parser.add_argument('--clip2w_weights_path', default='/home/ssd_storage/experiments/clip_decoder/mlflow/artifact_store/memory_decoder/3e4a65b5470d421db0b9c4eaf82c5737/artifacts/{}_flow_model_mapping199.pth', 
+    #                     type=str, help='dir with clip2w weights')
+    parser.add_argument('--clip2w_weights_path', default='/home/ssd_storage/experiments/clip_decoder/mlflow/artifact_store/memory_decoder/6e45416f50da4dba9d0bb3a4c375e465/artifacts/{}_flow_model_mapping174.pth', 
                         type=str, help='dir with clip2w weights')
+    
 
     parser.add_argument('--txt2img_n_hidden', type=int, default=5, help='Number of hidden layers in each MADE.')
     parser.add_argument('--txt2img_n_blocks', type=int, default=5,
